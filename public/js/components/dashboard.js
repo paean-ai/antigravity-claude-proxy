@@ -19,7 +19,8 @@ window.Components.dashboard = () => ({
     claudeConfigStatus: {
         needsApply: false,
         presetName: '',
-        checked: false
+        checked: false,
+        lastCheckedAt: 0
     },
 
     // Filter state (from module)
@@ -246,14 +247,17 @@ window.Components.dashboard = () => ({
     },
 
     /**
-     * Check if Claude CLI config needs to be updated
-     * Fetches both local config and presets, then compares
+     * Check if Claude CLI config needs to be updated.
+     * Fetches both local config and presets, then compares against all presets.
+     * Skips if already checked within the last 30 seconds.
      */
     async checkClaudeConfigStatus() {
+        const now = Date.now();
+        if (this.claudeConfigStatus.checked && now - this.claudeConfigStatus.lastCheckedAt < 30000) return;
+
         try {
             const password = Alpine.store('global').webuiPassword;
 
-            // Fetch both config and presets in parallel
             const [configRes, presetsRes] = await Promise.all([
                 window.utils.request('/api/claude/config', {}, password),
                 window.utils.request('/api/claude/presets', {}, password)
@@ -261,6 +265,7 @@ window.Components.dashboard = () => ({
 
             if (!configRes.response.ok || !presetsRes.response.ok) {
                 this.claudeConfigStatus.checked = true;
+                this.claudeConfigStatus.lastCheckedAt = now;
                 return;
             }
 
@@ -271,12 +276,10 @@ window.Components.dashboard = () => ({
             const presets = presetsData.presets || [];
 
             if (presets.length === 0) {
-                this.claudeConfigStatus = { needsApply: false, presetName: '', checked: true };
+                this.claudeConfigStatus = { needsApply: false, presetName: '', checked: true, lastCheckedAt: now };
                 return;
             }
 
-            // Use first preset as the default/selected one
-            const selectedPreset = presets[0];
             const relevantKeys = [
                 'ANTHROPIC_BASE_URL',
                 'ANTHROPIC_AUTH_TOKEN',
@@ -288,25 +291,25 @@ window.Components.dashboard = () => ({
                 'ENABLE_EXPERIMENTAL_MCP_CLI'
             ];
 
-            // Check if local config matches the selected preset
-            let needsApply = false;
-            for (const key of relevantKeys) {
-                const localVal = localConfig.env?.[key] || '';
-                const presetVal = selectedPreset.config[key] || '';
-                if (localVal !== presetVal) {
-                    needsApply = true;
-                    break;
-                }
-            }
+            // Check if local config matches ANY preset
+            const matchesAnyPreset = presets.some(preset => {
+                return relevantKeys.every(key => {
+                    const localVal = localConfig.env?.[key] || '';
+                    const presetVal = preset.config[key] || '';
+                    return localVal === presetVal;
+                });
+            });
 
             this.claudeConfigStatus = {
-                needsApply,
-                presetName: selectedPreset.name,
-                checked: true
+                needsApply: !matchesAnyPreset,
+                presetName: presets[0].name,
+                checked: true,
+                lastCheckedAt: now
             };
         } catch (e) {
             console.error('Failed to check Claude config status:', e);
             this.claudeConfigStatus.checked = true;
+            this.claudeConfigStatus.lastCheckedAt = Date.now();
         }
     },
 
