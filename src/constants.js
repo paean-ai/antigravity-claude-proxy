@@ -33,7 +33,7 @@ function getAntigravityDbPath() {
 function getPlatformUserAgent() {
     const os = platform();
     const architecture = arch();
-    return `antigravity/1.16.5 ${os}/${architecture}`;
+    return `antigravity/${ANTIGRAVITY_VERSION} ${os}/${architecture}`;
 }
 
 // IDE Type enum (numeric values as expected by Cloud Code API)
@@ -91,6 +91,9 @@ export const ANTIGRAVITY_ENDPOINT_FALLBACKS = [
     ANTIGRAVITY_ENDPOINT_DAILY,
     ANTIGRAVITY_ENDPOINT_PROD
 ];
+
+// Antigravity version used for User-Agent
+export const ANTIGRAVITY_VERSION = '1.16.5';
 
 // Required headers for Antigravity API requests
 export const ANTIGRAVITY_HEADERS = {
